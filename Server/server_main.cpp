@@ -24,7 +24,10 @@
 #define DEFAULT_PORT "8412"
 #define LOCAL_HOST_ADDR "127.0.0.1"
 
-std::vector<SOCKET> gClientList;
+
+WSADATA wsaData;
+struct addrinfo* info = nullptr;
+struct addrinfo hints;
 
 // Define a data structure to represent a room
 struct ChatRoom {
@@ -32,6 +35,35 @@ struct ChatRoom {
 	std::vector<SOCKET> clients;  // List of clients in this room
 };
 
+
+// Clean up connections and addr info.
+void cleanUp() {
+	freeaddrinfo(info);
+	WSACleanup();
+}
+
+// Handle errors, clean memory if needed.
+void handleError(std::string scenario, bool freeMemoryOnError) {
+	int errorCode = WSAGetLastError();
+	if (errorCode == WSAEWOULDBLOCK) {
+		// No data available right now, continue the loop or do other work.
+	}
+	else if (errorCode == WSANOTINITIALISED) {
+		// WSA not yet initialized.
+	}
+	else {
+		// Other errors here.
+		std::cout << scenario << " failed. Error - " << errorCode << std::endl;
+
+		// Close the socket if necessary.
+		if (freeMemoryOnError) {
+			cleanUp();
+		}
+	}
+}
+
+
+// Broadcast message to the other connections in the room, except the sender.
 void BroadcastMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE type, SOCKET senderSocket, const std::map<std::string, ChatRoom>& rooms) {
 	for (const auto& room : rooms) {
 		for (SOCKET clientSocket : room.second.clients) {
@@ -79,6 +111,8 @@ void BroadcastMessage(const std::string& msg, const std::string& name, MESSAGE_T
 	}
 }
 
+
+// Create pre-defined rooms for users to enter  
 void createRooms(std::map<std::string, ChatRoom>& rooms) {
 	std::string gameroom = "games";
 	std::string studyroom = "study";
@@ -99,18 +133,21 @@ void createRooms(std::map<std::string, ChatRoom>& rooms) {
 
 	printf("%s .... Room Created\n", gameroom.c_str());
 	printf("%s .... Room Created\n", studyroom.c_str());
-	printf("%s .... Room Created", newsroom.c_str());
+	printf("%s .... Room Created\n", newsroom.c_str());
 }
 
+
+// Print a horizontal line as a separator
 void printLine() {
 	printf("\n--------------------------------------\n");
 }
 
+
+// Server code execution begins
 int main(int arg, char** argv) {
 	printf("Initializing Server...\n\n");
 
 	// Initialize WinSock
-	WSADATA wsaData;
 	int result;
 
 	// Set version 2.2 with MAKEWORD(2,2)
@@ -121,8 +158,6 @@ int main(int arg, char** argv) {
 	}
 	printf("WSAStartup           --->  Success!\n");
 
-	struct addrinfo* info = nullptr;
-	struct addrinfo hints;
 	
 	ZeroMemory(&hints, sizeof(hints));	// ensure we don't have garbage data 
 	hints.ai_family = AF_INET;			// IPv4
@@ -132,10 +167,10 @@ int main(int arg, char** argv) {
 
 	result = getaddrinfo(NULL, DEFAULT_PORT, &hints, &info);
 	if (result != 0) {
-		printf("Failed geting address info with error: %d\n", result);
-		WSACleanup();
+		handleError("GetAddrInfo", true);
 		return 1;
 	}
+
 	printf("Geting Address Info  --->  Success!\n");
 
 	// Socket
@@ -151,43 +186,33 @@ int main(int arg, char** argv) {
 	// Bind
 	result = bind(listenSocket, info->ai_addr, (int)info->ai_addrlen);
 	if (result == SOCKET_ERROR) {
-		printf("bind failed with error %d\n", WSAGetLastError());
+		printf("Bind failed - Error %d\n", WSAGetLastError());
 		closesocket(listenSocket);
-		freeaddrinfo(info);
-		WSACleanup();
+		cleanUp();
 		return 1;
 	}
 
 	// Listen
 	result = listen(listenSocket, SOMAXCONN);
 	if (result == SOCKET_ERROR) {
-		printf("listen failed with error %d\n", WSAGetLastError());
+		printf("Listen failed - Error %d\n", WSAGetLastError());
 		closesocket(listenSocket);
-		freeaddrinfo(info);
-		WSACleanup();
+		cleanUp();
 		return 1;
 	}
 	printf("Listening to socket  --->  Success!\n");
 
-	// Set Non-Blocking
-	/*u_long mode = 1;
-	result = ioctlsocket(listenSocket, FIONBIO, &mode);
-	if (result == SOCKET_ERROR) {
-		printf("listen failed with error %d\n", WSAGetLastError());
-		closesocket(listenSocket);
-		freeaddrinfo(info);
-		WSACleanup();
-		return 1;
-	}*/
 
+	// Creating rooms
 	printLine();
-	printf("Creating rooms... \n");
-	//std::vector<SOCKET> activeConnections;
+	printf("\nCreating rooms... \n");
+
 	std::map<std::string, ChatRoom> rooms;
 	createRooms(rooms);
-
 	printLine();
 
+
+	// Initialize active sockets and sockets ready for reading
 	FD_SET activeSockets;
 	FD_SET socketsReadyForReading;
 
@@ -212,24 +237,12 @@ int main(int arg, char** argv) {
 		}
 
 		int count = select(0, &socketsReadyForReading, NULL, NULL, &tv);
-		if (count == 0)
-		{
+		if (count == 0) {
 			continue;
 		}
 
-		if (count == SOCKET_ERROR)
-		{
-			int error = WSAGetLastError();
-
-			if (error == WSAECONNRESET) {
-				// Handle the connection reset by the peer (client closed socket) error.
-				// Close the socket, remove it from monitoring, log the error, etc.
-
-			}
-			else {
-
-			}
-
+		if (count == SOCKET_ERROR) {
+			handleError("Socket Select", false);
 			continue;
 		}
 
@@ -244,10 +257,10 @@ int main(int arg, char** argv) {
 					const int bufSize = 512;
 					Buffer buffer(bufSize);
 
-					// result 
-					//		-1 : SOCKET_ERROR (More info received from WSAGetLastError() after)
-					//		0 : client disconnected
-					//		>0: The number of bytes received.
+					// Socket recv result checks
+					// -1 : SOCKET_ERROR -- Get more info received from WSAGetLastError() after 
+					//  0 : Client disconnected
+					// >0 : The number of bytes received.
 					int result = recv(socket, (char*)(&buffer.m_BufferData[0]), bufSize, 0);
 					if (result == SOCKET_ERROR) {
 						printf("11 recv failed with error %d\n", WSAGetLastError());
@@ -287,13 +300,11 @@ int main(int arg, char** argv) {
 					}
 
 					if (result > 0) {
-
-						// We must receive 4 bytes before we know how long the packet actually is
-						// We must receive the entire packet before we can handle the message.
-						// Our protocol says we have a HEADER[pktsize, messagetype];
+						// Get the data from buffer.
 						uint32_t packetSize = buffer.ReadUInt32LE();
 						uint32_t messageType = buffer.ReadUInt32LE();
 
+						// Check data based on message type.
 						if (messageType == NOTIFICATION) {
 							uint32_t messageLength = buffer.ReadUInt32LE();
 							uint32_t nameLength = buffer.ReadUInt32LE();
@@ -309,8 +320,6 @@ int main(int arg, char** argv) {
 							uint32_t nameLength = buffer.ReadUInt32LE();
 							std::string msg = buffer.ReadString(messageLength);
 							std::string name = buffer.ReadString(nameLength);
-
-							//printf("%s: %s  (%d bits)\n", name.c_str(), msg.c_str(), result);
 
 							BroadcastMessage(msg, name, TEXT, socket, rooms);
 						}
@@ -444,13 +453,13 @@ int main(int arg, char** argv) {
 				}
 			}
 		}
-
 	}
 
-	// Cleanup
-	freeaddrinfo(info);
+	system("Pause");
+
+	// Cleanup resources and close socket connection.
 	closesocket(listenSocket);
-	WSACleanup();
+	cleanUp();
 
 	return 0;
 }
