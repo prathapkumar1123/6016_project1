@@ -1,0 +1,15 @@
+﻿  client_main.cpp
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\Buffer.h(24,22): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\Buffer.h(59,40): warning C4244: '=': conversion from 'uint16_t' to '_Ty', possible loss of data
+          with
+          [
+              _Ty=uint8_t
+          ]
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\Buffer.h(88,34): warning C4018: '>': signed/unsigned mismatch
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\client_main.cpp(25,39): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\client_main.cpp(26,37): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\client_main.cpp(32,36): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\client_main.cpp(68,20): warning C4129: 'J': unrecognized character escape sequence
+  main.cpp
+  Generating Code...
+  Project_ChatProgram.vcxproj -> D:\GDP\6016\Project_ChatProgram\x64\Debug\Project_ChatProgram.exe

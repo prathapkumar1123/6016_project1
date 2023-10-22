@@ -1,0 +1,12 @@
+﻿  server_main.cpp
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\Buffer.h(24,22): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\Buffer.h(59,40): warning C4244: '=': conversion from 'uint16_t' to '_Ty', possible loss of data
+          with
+          [
+              _Ty=uint8_t
+          ]
+D:\GDP\6016\Project_ChatProgram\Project_ChatProgram\Buffer.h(88,34): warning C4018: '>': signed/unsigned mismatch
+D:\GDP\6016\Project_ChatProgram\Server\server_main.cpp(51,39): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+D:\GDP\6016\Project_ChatProgram\Server\server_main.cpp(52,37): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+D:\GDP\6016\Project_ChatProgram\Server\server_main.cpp(58,6): warning C4267: '=': conversion from 'size_t' to 'uint32_t', possible loss of data
+  Server.vcxproj -> D:\GDP\6016\Project_ChatProgram\x64\Debug\Server.exe
