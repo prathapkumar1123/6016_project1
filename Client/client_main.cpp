@@ -9,6 +9,7 @@
 #include <WS2tcpip.h>
 #include <conio.h>
 #include <future>
+#include <sstream>
 
 #include "Buffer.h"
 #include "Message.h"
@@ -22,6 +23,8 @@ SOCKET clientSocket;
 
 struct addrinfo* info = nullptr;
 struct addrinfo hints;
+
+std::vector<std::string> roomNames;
 
 // Close the socket connection and clean up resources
 void closeSocketConnection() {
@@ -89,6 +92,25 @@ int sendMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE ty
 
 // Join a chat room
 int joinRoom(std::string& name, std::string& selectedRoom, SOCKET& socket) {
+    std::string roomName;
+    std::istringstream ss(selectedRoom);
+
+    while (std::getline(ss, name, ',')) {
+        bool isDuplicate = false;
+        // Check if 'roomName' is not empty
+        if (!roomName.empty()) {
+            for (const std::string& existingRoom : roomNames) {
+                if (existingRoom == roomName) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                roomNames.push_back(roomName);
+            }
+        }
+    }
+
     int selectRoomResult = sendMessage(selectedRoom, name, JOIN_ROOM, socket);
     if (selectRoomResult == SOCKET_ERROR) {
         handleError("Join Room", false);
@@ -142,8 +164,18 @@ void receiveMessages(SOCKET socket) {
 }
 
 // Send a leave room message
-void sendLeaveMessage(std::string name, std::string roomname, SOCKET socket) {
-    sendMessage(roomname, name, LEAVE_ROOM, socket);
+void sendLeaveMessage(std::string name, std::string roomName, SOCKET socket) {
+    if (!roomName.empty()) {
+        // Search for 'roomName' in 'roomNames'
+        auto it = std::find(roomNames.begin(), roomNames.end(), roomName);
+
+        if (it != roomNames.end()) {
+            // 'roomName' already exists, remove it
+            roomNames.erase(it);
+        }
+    }
+
+    sendMessage(roomName, name, LEAVE_ROOM, socket);
 }
 
 
@@ -247,8 +279,10 @@ int main() {
         }
 
         if (message.compare(0, 3, "\\LR") == 0) {
-            std::string roomName = message.substr(3);
-            sendLeaveMessage(name, roomName, clientSocket);
+            if (roomNames.size() > 0) {
+                std::string roomName = message.substr(3);
+                sendLeaveMessage(name, roomName, clientSocket);
+            }
         }
         else if (!message.empty()) {
             sendMessage(message, name, TEXT, clientSocket);

@@ -412,7 +412,7 @@ int main(int arg, char** argv) {
 
 							selectedRoom = msg;
 
-							std::string joinMessage = name + " has joined the room .\n";
+							std::string joinMessage = name + " has joined the room.\n";
 
 							printf("%s has joined the room.\n", name.c_str());
 
