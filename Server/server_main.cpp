@@ -32,7 +32,7 @@ struct ChatRoom {
 	std::vector<SOCKET> clients;  // List of clients in this room
 };
 
-int BroadcastMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE type, SOCKET senderSocket, const std::map<std::string, ChatRoom>& rooms) {
+void BroadcastMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE type, SOCKET senderSocket, const std::map<std::string, ChatRoom>& rooms) {
 	for (const auto& room : rooms) {
 		for (SOCKET clientSocket : room.second.clients) {
 
@@ -72,15 +72,11 @@ int BroadcastMessage(const std::string& msg, const std::string& name, MESSAGE_TY
 				int result = send(clientSocket, (const char*)(&buffer.m_BufferData[0]), message.header.packetSize, 0);
 				if (result == SOCKET_ERROR) {
 					printf("Failed to broadcast message to client %d\n", WSAGetLastError());
-					return -1;
+					return;
 				}
-
-				return result;
 			}
 		}
 	}
-
-	return 0;
 }
 
 void createRooms(std::map<std::string, ChatRoom>& rooms) {
@@ -314,11 +310,9 @@ int main(int arg, char** argv) {
 							std::string msg = buffer.ReadString(messageLength);
 							std::string name = buffer.ReadString(nameLength);
 
-							printf("%s: %s  (%d bits)\n", name.c_str(), msg.c_str(), result);
+							//printf("%s: %s  (%d bits)\n", name.c_str(), msg.c_str(), result);
 
 							BroadcastMessage(msg, name, TEXT, socket, rooms);
-
-							// Must use .c_str() if printing from a std::string, to return as a 'const char*'
 						}
 						else if (messageType == LEAVE_ROOM) {
 							uint32_t messageLength = buffer.ReadUInt32LE();
@@ -348,12 +342,6 @@ int main(int arg, char** argv) {
 										socketFoundInAnyRoom = true;
 									}
 								}
-							}
-
-							auto it = std::find(room.second.clients.begin(), room.second.clients.end(), socket);
-
-							if (it != room.second.clients.end()) {
-								room.second.clients.erase(it);
 							}
 
 							if (!socketFoundInAnyRoom) {
@@ -395,7 +383,7 @@ int main(int arg, char** argv) {
 
 						}
 						else {
-							printf("hellooo recv failed with error %d\n", WSAGetLastError());
+							printf("recv failed with error %d\n", WSAGetLastError());
 							closesocket(listenSocket);
 							freeaddrinfo(info);
 							WSACleanup();

@@ -18,6 +18,38 @@
 #define DEFAULT_PORT "8412"
 #define LOCAL_HOST_ADDR "127.0.0.1"
 
+SOCKET clientSocket;
+
+struct addrinfo* info = nullptr;
+struct addrinfo hints;
+
+void closeSocketConnection() {
+    closesocket(clientSocket);
+    WSACleanup();
+}
+
+void handleError(std::string scenario, bool freeMemoryOnError) {
+    int errorCode = WSAGetLastError();
+    if (errorCode == WSAEWOULDBLOCK) {
+        // No data available right now, continue the loop or do other work.
+    }
+    else if (errorCode == WSANOTINITIALISED) {
+        // WSA not yet initialized. We
+    }
+    else {
+        // Other errors here.
+        std::cout << scenario << " failed. Error - " << errorCode << std::endl;
+
+        // Close the socket if necessary.
+        if (freeMemoryOnError) {
+            closeSocketConnection();
+            freeaddrinfo(info);
+            WSACleanup();
+        }
+
+    }
+}
+
 int sendMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE type, SOCKET socket) {
     ChatMessage message;
     message.message = msg;
@@ -44,31 +76,17 @@ int sendMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE ty
     buffer.WriteString(message.from);
 
     int result = send(socket, reinterpret_cast<const char*>(buffer.m_BufferData.data()), message.header.packetSize, 0);
-    return result;
-}
+    if (result == SOCKET_ERROR) {
+        handleError("Send message", false);
+    }
 
-void closeSocketConnection(SOCKET socket) {
-    closesocket(socket);
-    WSACleanup();
+    return result;
 }
 
 int joinRoom(std::string& name, std::string& selectedRoom, SOCKET& socket) {
     int selectRoomResult = sendMessage(selectedRoom, name, JOIN_ROOM, socket);
     if (selectRoomResult == SOCKET_ERROR) {
-        int errorCode = WSAGetLastError();
-        if (errorCode == WSAEWOULDBLOCK) {
-            // No data available right now, continue the loop or do other work.
-        }
-        else if (errorCode == WSANOTINITIALISED) {
-            // WSA not yet initialized. We
-        }
-        else {
-            // Other errors here.
-            // Close the socket if necessary.
-            printf("\Join Room failed with error %d", WSAGetLastError());
-            closeSocketConnection(socket);
-            return 1;
-        }
+        handleError("Join Room", false);
     }
 
     return 0;
@@ -80,21 +98,8 @@ void receiveMessages(SOCKET socket) {
 
     int result = recv(socket, reinterpret_cast<char*>(buffer.m_BufferData.data()), bufSize, 0);
     if (result == SOCKET_ERROR) {
-        int errorCode = WSAGetLastError();
-
-        if (errorCode == WSAEWOULDBLOCK) {
-            // No data available right now, continue the loop or do other work.
-        }
-        else if (errorCode == WSANOTINITIALISED) {
-            // WSA not yet initialized.
-        }
-        else {
-            // Handle other errors here.
-            // Close the socket if necessary.
-            printf("\nrecv failed with error %d", WSAGetLastError());
-            closeSocketConnection(socket);
-            return;
-        }
+        handleError("Receive Data", false);
+        return;
     }
 
     if (result > 0) {
@@ -129,12 +134,7 @@ void receiveMessages(SOCKET socket) {
 }
 
 void sendLeaveMessage(std::string name, std::string roomname, SOCKET socket) {
-    int result = sendMessage(roomname, name, LEAVE_ROOM, socket);
-    if (result == SOCKET_ERROR) {
-        printf("\nsend failed with error %d", WSAGetLastError());
-        closeSocketConnection(socket);
-        return;
-    }
+    sendMessage(roomname, name, LEAVE_ROOM, socket);
 }
 
 void printLine() {
@@ -148,6 +148,8 @@ void displayRoomInfo() {
 }
 
 int main() {
+
+    printf("Intializing...\n\n");
 
     // Initialize WinSock
     WSADATA wsaData;
@@ -172,48 +174,22 @@ int main() {
 
     result = getaddrinfo(LOCAL_HOST_ADDR, DEFAULT_PORT, &hints, &info);
     if (result == SOCKET_ERROR) {
-        printf("\ngetaddrinfo failed with error %d", result);
-        WSACleanup();
-        return 1;
+        handleError("GetAddrInfo", true);
     }
 
     // Socket
     SOCKET clientSocket = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
     if (clientSocket == INVALID_SOCKET) {
-        printf("\nsocket failed with error %d", WSAGetLastError());
-        freeaddrinfo(info);
-        WSACleanup();
-        return 1;
+        handleError("Socket initialization", true);
     }
 
     // Connect
     result = connect(clientSocket, info->ai_addr, static_cast<int>(info->ai_addrlen));
     if (result == SOCKET_ERROR) { // Fixed the condition here
-        int error = WSAGetLastError();
-        if (error == WSAEWOULDBLOCK) {
-            // The connection is still in progress. You can continue checking.
-        }
-        else {
-            // Handle other error codes and possibly close the socket.
-            printf("\nconnect failed with error %d", WSAGetLastError());
-            closeSocketConnection(clientSocket); // Use the correct function
-            freeaddrinfo(info);
-            WSACleanup();
-            return 1;
-        }
+        handleError("Socket connection", true);
     }
-    printf("\nConnected to the server successfully!");
 
-    // Set Non-Blocking
-    u_long mode = 1;
-    result = ioctlsocket(clientSocket, FIONBIO, &mode);
-    if (result == SOCKET_ERROR) {
-        printf("listen failed with error %d\n", WSAGetLastError());
-        closesocket(clientSocket);
-        freeaddrinfo(info);
-        WSACleanup();
-        return 1;
-    }
+    printf("Connected to the server successfully!");
 
     displayRoomInfo();
 
@@ -221,7 +197,7 @@ int main() {
     std::string selectedRoom;
 
     std::cout << "\nEnter your name: ";
-    std::getline(std::cin, name); // Use getline to handle spaces in the name
+    std::getline(std::cin, name);
 
     std::cout << "Enter an existing room name or create a new room: ";
     std::getline(std::cin, selectedRoom);
@@ -242,7 +218,6 @@ int main() {
     });
 
     while (isRunning) {
-
         std::string message;
         std::cout << "You: ";
         std::getline(std::cin, message);
@@ -255,17 +230,10 @@ int main() {
 
         if (message.compare(0, 3, "\\LR") == 0) {
             std::string roomName = message.substr(3);
-            std::cout << "Room Name: " << roomName << std::endl;
-
             sendLeaveMessage(name, roomName, clientSocket);
         }
         else if (!message.empty()) {
-            int result = sendMessage(message, name, TEXT, clientSocket);
-            if (result == SOCKET_ERROR) {
-                printf("\nsend failed with error %d", WSAGetLastError());
-                closeSocketConnection(clientSocket);
-                break;
-            }
+            sendMessage(message, name, TEXT, clientSocket);
         }
     }
 
@@ -274,7 +242,7 @@ int main() {
     system("Pause");
 
     // Close
-    closeSocketConnection(clientSocket);
+    closeSocketConnection();
 
     return 0;
 }
