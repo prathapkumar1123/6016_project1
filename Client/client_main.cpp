@@ -23,18 +23,20 @@ SOCKET clientSocket;
 struct addrinfo* info = nullptr;
 struct addrinfo hints;
 
+// Close the socket connection and clean up resources
 void closeSocketConnection() {
     closesocket(clientSocket);
     WSACleanup();
 }
 
+// Handle errors, clean memory if needed.
 void handleError(std::string scenario, bool freeMemoryOnError) {
     int errorCode = WSAGetLastError();
     if (errorCode == WSAEWOULDBLOCK) {
         // No data available right now, continue the loop or do other work.
     }
     else if (errorCode == WSANOTINITIALISED) {
-        // WSA not yet initialized. We
+        // WSA not yet initialized.
     }
     else {
         // Other errors here.
@@ -50,6 +52,7 @@ void handleError(std::string scenario, bool freeMemoryOnError) {
     }
 }
 
+// Prepare and send a chat message
 int sendMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE type, SOCKET socket) {
     ChatMessage message;
     message.message = msg;
@@ -83,6 +86,8 @@ int sendMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE ty
     return result;
 }
 
+
+// Join a chat room
 int joinRoom(std::string& name, std::string& selectedRoom, SOCKET& socket) {
     int selectRoomResult = sendMessage(selectedRoom, name, JOIN_ROOM, socket);
     if (selectRoomResult == SOCKET_ERROR) {
@@ -92,16 +97,19 @@ int joinRoom(std::string& name, std::string& selectedRoom, SOCKET& socket) {
     return 0;
 }
 
+// Receive and process incoming chat messages
 void receiveMessages(SOCKET socket) {
     const int bufSize = 512;
     Buffer buffer(bufSize);
 
+    // Call recv function to get data
     int result = recv(socket, reinterpret_cast<char*>(buffer.m_BufferData.data()), bufSize, 0);
     if (result == SOCKET_ERROR) {
         handleError("Receive Data", false);
         return;
     }
 
+    // Check and process if result contains any data.
     if (result > 0) {
         uint32_t packetSize = buffer.ReadUInt32LE();
         uint32_t messageType = buffer.ReadUInt32LE();
@@ -133,20 +141,27 @@ void receiveMessages(SOCKET socket) {
     }
 }
 
+// Send a leave room message
 void sendLeaveMessage(std::string name, std::string roomname, SOCKET socket) {
     sendMessage(roomname, name, LEAVE_ROOM, socket);
 }
 
+
+// Print a horizontal line as a separator
 void printLine() {
     printf("\n-------------------------------------\n");
 }
 
+
+// Display information about available chat rooms
 void displayRoomInfo() {
     printLine();
     printf("Existing Rooms: \n1. games\n2. study\n3. news");
     printLine();
 }
 
+
+// The main function where the program execution begins
 int main() {
 
     printf("Intializing...\n\n");
@@ -166,12 +181,13 @@ int main() {
     struct addrinfo* info = nullptr;
     struct addrinfo hints;
 
-    ZeroMemory(&hints, sizeof(hints));    // Ensure we don't have garbage data
-    hints.ai_family = AF_INET;            // IPv4
-    hints.ai_socktype = SOCK_STREAM;    // Stream
-    hints.ai_protocol = IPPROTO_TCP;    // TCP
+    ZeroMemory(&hints, sizeof(hints));      // Ensure we don't have garbage data
+    hints.ai_family = AF_INET;              // IPv4
+    hints.ai_socktype = SOCK_STREAM;        // Stream
+    hints.ai_protocol = IPPROTO_TCP;        // TCP
     hints.ai_flags = AI_PASSIVE;
 
+    // Getting addr info
     result = getaddrinfo(LOCAL_HOST_ADDR, DEFAULT_PORT, &hints, &info);
     if (result == SOCKET_ERROR) {
         handleError("GetAddrInfo", true);
@@ -193,6 +209,8 @@ int main() {
 
     displayRoomInfo();
 
+
+    // Ask user for name and room information.
     std::string name;
     std::string selectedRoom;
 
