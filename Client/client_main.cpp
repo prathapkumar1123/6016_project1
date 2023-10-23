@@ -275,7 +275,9 @@ int main() {
         std::getline(std::cin, message);
 
         if (message == "exit") {
-            sendLeaveMessage(name, selectedRoom, clientSocket);
+            for (const std::string& roomName : roomNames) {
+                sendLeaveMessage(name, roomName, clientSocket);
+            }
             isRunning = false;
             break;
         }
