@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 
 #include "Buffer.h"
 #include "Message.h"
@@ -65,6 +66,9 @@ void handleError(std::string scenario, bool freeMemoryOnError) {
 
 // Broadcast message to the other connections in the room, except the sender.
 void BroadcastMessage(const std::string& msg, const std::string& name, MESSAGE_TYPE type, SOCKET senderSocket, const std::map<std::string, ChatRoom>& rooms) {
+	
+	std::set<SOCKET> sentSockets;
+
 	for (const auto& room : rooms) {
 		for (SOCKET clientSocket : room.second.clients) {
 
@@ -73,6 +77,10 @@ void BroadcastMessage(const std::string& msg, const std::string& name, MESSAGE_T
 			if (it == room.second.clients.end()) {
 				// senderSocket is not in this room's clients
 				continue; // Skip broadcasting to this room
+			}
+
+			if (sentSockets.find(clientSocket) != sentSockets.end()) {
+				continue;  // Skip broadcasting to this client
 			}
 
 			if (clientSocket != senderSocket) {
@@ -106,6 +114,8 @@ void BroadcastMessage(const std::string& msg, const std::string& name, MESSAGE_T
 					printf("Failed to broadcast message to client %d\n", WSAGetLastError());
 					return;
 				}
+
+				sentSockets.insert(clientSocket);
 			}
 		}
 	}

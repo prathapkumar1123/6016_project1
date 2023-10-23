@@ -26,8 +26,11 @@ struct addrinfo hints;
 
 std::vector<std::string> roomNames;
 
+bool isRunning = true;
+
 // Close the socket connection and clean up resources
 void closeSocketConnection() {
+    freeaddrinfo(info);
     closesocket(clientSocket);
     WSACleanup();
 }
@@ -95,7 +98,7 @@ int joinRoom(std::string& name, std::string& selectedRoom, SOCKET& socket) {
     std::string roomName;
     std::istringstream ss(selectedRoom);
 
-    while (std::getline(ss, name, ',')) {
+    while (std::getline(ss, roomName, ',')) {
         bool isDuplicate = false;
         // Check if 'roomName' is not empty
         if (!roomName.empty()) {
@@ -170,7 +173,7 @@ void sendLeaveMessage(std::string name, std::string roomName, SOCKET socket) {
         auto it = std::find(roomNames.begin(), roomNames.end(), roomName);
 
         if (it != roomNames.end()) {
-            // 'roomName' already exists, remove it
+            // 'roomName' exists, remove it
             roomNames.erase(it);
         }
     }
@@ -201,7 +204,6 @@ int main() {
     // Initialize WinSock
     WSADATA wsaData;
     int result;
-    bool isRunning = true;
 
     // Set version 2.2 with MAKEWORD(2,2)
     result = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -226,7 +228,7 @@ int main() {
     }
 
     // Socket
-    SOCKET clientSocket = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
+    clientSocket = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
     if (clientSocket == INVALID_SOCKET) {
         handleError("Socket initialization", true);
     }
@@ -258,7 +260,7 @@ int main() {
     }
 
     printf("\n\n*** Type a message and press 'Enter' to send ***");
-    printf("\n*** Type 'exit' to quit ***\n\n");
+    printf("\n*** Type 'exit' to quit, '\LR ROOM_NAME' to leave room ***\n\n");
 
     // Create a separate thread for receiving messages
     std::thread receiveThread([&] {
@@ -280,8 +282,13 @@ int main() {
 
         if (message.compare(0, 3, "\\LR") == 0) {
             if (roomNames.size() > 0) {
-                std::string roomName = message.substr(3);
+                std::string roomName = message.substr(4);
                 sendLeaveMessage(name, roomName, clientSocket);
+
+                if (roomNames.size() == 0) {
+                    isRunning = false;
+                    break;
+                }
             }
         }
         else if (!message.empty()) {
@@ -289,12 +296,17 @@ int main() {
         }
     }
 
-    receiveThread.join();
-
-    system("Pause");
+    if (isRunning) {
+        receiveThread.join();
+    }
+    else {
+        receiveThread.detach();
+    }
 
     // Close
-    closeSocketConnection();
+    freeaddrinfo(info);
+    closesocket(clientSocket);
+    WSACleanup();
 
     return 0;
 }
